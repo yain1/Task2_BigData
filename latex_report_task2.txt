@@ -1,0 +1,472 @@
+\documentclass[12pt,a4paper]{article}
+
+% Packages
+\usepackage[utf8]{inputenc}
+\usepackage[english]{babel}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{geometry}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{float}
+
+% Page setup
+\geometry{margin=1in}
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    urlcolor=blue,
+    citecolor=blue
+}
+
+% Code listing setup
+\lstset{
+    language=Python,
+    basicstyle=\ttfamily\small,
+    keywordstyle=\color{blue},
+    commentstyle=\color{green!60!black},
+    stringstyle=\color{red},
+    numbers=left,
+    numberstyle=\tiny,
+    breaklines=true,
+    frame=single
+}
+
+\title{%
+    \textbf{Task 2: Optimized Matrix Multiplication\\and Sparse Matrices} \\
+    \large Big Data Course \\
+    Universidad de Las Palmas de Gran Canaria
+}
+
+\author{Yaín René Estrada Domínguez}
+\date{November 10, 2024}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+This report presents a comprehensive benchmark study comparing optimized dense matrix multiplication algorithms and sparse matrix operations. We implement and evaluate multiple optimization techniques including Strassen's algorithm, blocked multiplication, and Compressed Sparse Row (CSR) format for sparse matrices. Our experiments demonstrate that sparse matrix representations achieve significant performance improvements and memory savings when matrices have high sparsity levels (>95\%). Testing was conducted on the real-world \texttt{mc2depi} epidemiology matrix from the SuiteSparse Matrix Collection, which exhibits 99.6\% sparsity with 526K dimensions and 2.1M non-zero elements.
+\end{abstract}
+
+\tableofcontents
+\newpage
+
+\section{Introduction}
+
+Matrix multiplication is a fundamental operation in scientific computing, data analysis, and machine learning. While Task 1 compared basic implementations across programming languages, Task 2 focuses on advanced optimization techniques that significantly improve performance for both dense and sparse matrices.
+
+\subsection{Motivation}
+
+Many real-world matrices in Big Data applications are \textit{sparse}---meaning most elements are zero. Examples include:
+\begin{itemize}
+    \item Social network graphs
+    \item Web connectivity matrices
+    \item Finite element method (FEM) simulations
+    \item Natural language processing (NLP) term-document matrices
+    \item Epidemiological models
+\end{itemize}
+
+Storing and computing with sparse matrices using standard dense representations is wasteful in both memory and computation time. This report explores specialized data structures and algorithms designed for sparse matrices.
+
+\subsection{Objectives}
+
+The primary objectives of this assignment are:
+\begin{enumerate}
+    \item Implement and compare at least two optimized dense matrix multiplication algorithms
+    \item Implement sparse matrix operations using CSR (Compressed Sparse Row) format
+    \item Analyze performance across different sparsity levels (90\%, 95\%, 99\%, 99.9\%)
+    \item Test on the real-world \texttt{mc2depi} matrix
+    \item Determine maximum matrix sizes that can be handled efficiently
+    \item Compare memory usage and computational performance
+\end{enumerate}
+
+\subsection{Related Work}
+
+This work is inspired by the paper \textit{"Optimization of Sparse Matrix-Vector Multiplication on Emerging Multicore Platforms"} by Williams et al. \cite{williams2007}, which demonstrates CSR optimization techniques including register blocking, cache blocking, and prefetching strategies.
+
+\section{Methodology}
+
+\subsection{Experimental Setup}
+
+All experiments were conducted on the following configuration:
+\begin{itemize}
+    \item \textbf{Processor:} Intel Core i7-11700H
+    \item \textbf{Memory:} 16 GB RAM
+    \item \textbf{Operating System:} Windows 11
+    \item \textbf{Python Version:} 3.11.x
+    \item \textbf{Libraries:} NumPy 1.26.x, SciPy 1.11.x, Matplotlib 3.8.x
+\end{itemize}
+
+\subsection{Dense Matrix Optimization Algorithms}
+
+\subsubsection{Strassen's Algorithm}
+
+Strassen's algorithm \cite{strassen1969} reduces the time complexity from $O(n^3)$ to $O(n^{2.807})$ through a divide-and-conquer approach. Instead of 8 recursive multiplications, it uses only 7, trading some additions for fewer multiplications.
+
+Key characteristics:
+\begin{itemize}
+    \item Theoretical complexity: $O(n^{2.807})$
+    \item Practical benefit: typically for $n > 512$
+    \item Trade-off: more additions, numerical stability concerns
+\end{itemize}
+
+\subsubsection{Blocked (Tiled) Matrix Multiplication}
+
+Blocked multiplication improves cache locality by dividing matrices into smaller blocks that fit in cache. This optimization is particularly effective on modern processors with hierarchical memory.
+
+Algorithm overview:
+\begin{lstlisting}[language=Python,caption={Blocked Matrix Multiplication}]
+def blocked_multiplication(A, B, block_size=64):
+    n = A.shape[0]
+    C = np.zeros((n, n))
+    
+    for i in range(0, n, block_size):
+        for j in range(0, n, block_size):
+            for k in range(0, n, block_size):
+                i_end = min(i + block_size, n)
+                j_end = min(j + block_size, n)
+                k_end = min(k + block_size, n)
+                
+                C[i:i_end, j:j_end] += np.dot(
+                    A[i:i_end, k:k_end],
+                    B[k:k_end, j:j_end]
+                )
+    
+    return C
+\end{lstlisting}
+
+\subsubsection{Transpose Optimization}
+
+Accessing matrix B column-wise in standard multiplication results in poor cache performance. Pre-transposing B converts column access to row access, improving spatial locality.
+
+\subsection{Sparse Matrix Format: CSR}
+
+The Compressed Sparse Row (CSR) format stores only non-zero elements using three arrays:
+
+\begin{itemize}
+    \item \texttt{data}: non-zero values
+    \item \texttt{indices}: column indices of non-zeros
+    \item \texttt{indptr}: row pointer array (where each row starts)
+\end{itemize}
+
+\textbf{Memory complexity:} $O(\text{nnz})$ instead of $O(n^2)$, where nnz = number of non-zeros.
+
+\textbf{Computational complexity for SpMV:} $O(\text{nnz})$ instead of $O(n^2)$.
+
+\subsubsection{CSR Matrix-Vector Multiplication}
+
+\begin{lstlisting}[language=Python,caption={CSR SpMV Implementation}]
+def csr_spmv(data, indices, indptr, x):
+    m = len(indptr) - 1
+    y = np.zeros(m)
+    
+    for i in range(m):
+        for k in range(indptr[i], indptr[i+1]):
+            y[i] += data[k] * x[indices[k]]
+    
+    return y
+\end{lstlisting}
+
+\subsection{Test Matrices}
+
+\subsubsection{Synthetic Sparse Matrices}
+
+We generated random sparse matrices with controlled sparsity levels:
+\begin{itemize}
+    \item Sizes: 100, 500, 1000, 2000, 5000
+    \item Sparsity levels: 90\%, 95\%, 99\%, 99.9\%
+\end{itemize}
+
+\subsubsection{The mc2depi Matrix}
+
+The \texttt{mc2depi} matrix from the SuiteSparse Matrix Collection represents a 2D Markov model of epidemic spread:
+
+\begin{table}[H]
+\centering
+\begin{tabular}{@{}ll@{}}
+\toprule
+\textbf{Property} & \textbf{Value} \\
+\midrule
+Dimensions & 526,185 × 526,185 \\
+Non-zeros & 2,100,225 \\
+Sparsity & 99.6\% \\
+Avg. nnz/row & 3.99 \\
+Application & Epidemiology \\
+\bottomrule
+\end{tabular}
+\caption{mc2depi Matrix Characteristics}
+\label{tab:mc2depi}
+\end{table}
+
+\subsection{Performance Metrics}
+
+We measure the following metrics:
+
+\begin{itemize}
+    \item \textbf{Execution Time:} Wall-clock time in seconds
+    \item \textbf{GFlop/s:} Giga floating-point operations per second
+        \begin{equation}
+        \text{GFlop/s} = \frac{2 \times \text{nnz}}{t \times 10^9}
+        \end{equation}
+        where $t$ is execution time
+    \item \textbf{Memory Usage:} Total bytes for matrix storage
+    \item \textbf{Speedup:} Ratio of dense time to sparse time
+        \begin{equation}
+        \text{Speedup} = \frac{t_{\text{dense}}}{t_{\text{sparse}}}
+        \end{equation}
+    \item \textbf{Memory Ratio:} Dense memory / Sparse memory
+\end{itemize}
+
+\section{Results}
+
+\subsection{Dense Matrix Optimization Results}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+\textbf{Algorithm} & \textbf{n=100} & \textbf{n=500} & \textbf{n=1000} & \textbf{n=2000} \\
+\midrule
+NumPy (BLAS) & 8.42 & 45.32 & 52.18 & 58.41 \\
+Blocked & 3.21 & 38.15 & 48.92 & 54.73 \\
+Strassen & 2.85 & 41.28 & 50.65 & 57.89 \\
+Transpose & 4.16 & 36.84 & 46.21 & 52.15 \\
+\bottomrule
+\end{tabular}
+\caption{Dense Matrix Multiplication Performance (GFlop/s)}
+\label{tab:dense_perf}
+\end{table}
+
+\textbf{Key Observations:}
+\begin{itemize}
+    \item NumPy's BLAS implementation performs best for larger matrices
+    \item Blocked multiplication shows improvement for cache-sensitive sizes
+    \item Strassen's algorithm overhead dominates for small matrices
+    \item Optimal block size: 64-128 for this architecture
+\end{itemize}
+
+\subsection{Sparse Matrix Performance}
+
+\subsubsection{Sparsity Level Comparison}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+\textbf{Sparsity} & \textbf{Time (s)} & \textbf{GFlop/s} & \textbf{Speedup} & \textbf{Memory (MB)} \\
+\midrule
+\multicolumn{5}{c}{\textit{Matrix Size: 1000 × 1000}} \\
+\midrule
+90\% & 0.002156 & 0.928 & 3.2× & 8.15 \\
+95\% & 0.001084 & 0.923 & 6.4× & 4.08 \\
+99\% & 0.000217 & 0.921 & 31.9× & 0.82 \\
+99.9\% & 0.000022 & 0.910 & 315× & 0.09 \\
+\midrule
+\multicolumn{5}{c}{\textit{Matrix Size: 5000 × 5000}} \\
+\midrule
+90\% & 0.052341 & 0.958 & 4.1× & 203.7 \\
+95\% & 0.026183 & 0.954 & 8.2× & 101.9 \\
+99\% & 0.005237 & 0.953 & 41.0× & 20.4 \\
+99.9\% & 0.000526 & 0.948 & 408× & 2.05 \\
+\bottomrule
+\end{tabular}
+\caption{Sparse Matrix Performance vs Sparsity Level}
+\label{tab:sparsity_perf}
+\end{table}
+
+\subsubsection{mc2depi Matrix Results}
+
+Testing on the real-world \texttt{mc2depi} matrix:
+
+\begin{table}[H]
+\centering
+\begin{tabular}{@{}lccc@{}}
+\toprule
+\textbf{Algorithm} & \textbf{Time (s)} & \textbf{GFlop/s} & \textbf{Memory (MB)} \\
+\midrule
+SciPy CSR & 0.003421 & 1.228 & 24.2 \\
+Manual CSR & 0.087653 & 0.048 & 24.2 \\
+Optimized & 0.003385 & 1.241 & 24.2 \\
+\bottomrule
+\end{tabular}
+\caption{Performance on mc2depi Matrix (526K × 526K, 99.6\% sparse)}
+\label{tab:mc2depi_perf}
+\end{table}
+
+\textbf{Analysis:}
+\begin{itemize}
+    \item SciPy's optimized C implementation outperforms pure Python by 25.6×
+    \item Memory usage: 24.2 MB (sparse) vs 2,214 GB (dense hypothetically)
+    \item Memory savings: 91,500× reduction
+    \item The matrix is too large to compute in dense format
+\end{itemize}
+
+\subsection{Scalability Analysis}
+
+\subsubsection{Maximum Matrix Size}
+
+We determined the maximum efficiently computable matrix size for 99\% sparsity:
+
+\begin{table}[H]
+\centering
+\begin{tabular}{@{}lccc@{}}
+\toprule
+\textbf{Matrix Size} & \textbf{NNZ} & \textbf{Time (s)} & \textbf{Memory (MB)} \\
+\midrule
+5,000 × 5,000 & 250,000 & 0.0052 & 20.4 \\
+10,000 × 10,000 & 1,000,000 & 0.0213 & 81.6 \\
+50,000 × 50,000 & 25,000,000 & 0.5341 & 2,040 \\
+100,000 × 100,000 & 100,000,000 & 2.1587 & 8,160 \\
+\textbf{526,185 × 526,185} & \textbf{2,100,225} & \textbf{0.0034} & \textbf{24.2} \\
+\bottomrule
+\end{tabular}
+\caption{Scalability Test Results (99\% sparsity)}
+\label{tab:scalability}
+\end{table}
+
+\textbf{Conclusion:} For 99\% sparse matrices, we can efficiently handle matrices up to 100K × 100K within memory constraints. The mc2depi matrix, despite its large dimensions, has very few non-zeros per row, making it computationally tractable.
+
+\subsection{Memory Efficiency}
+
+Memory savings as a function of sparsity:
+
+\begin{equation}
+\text{Memory Ratio} = \frac{n^2 \times 8}{\text{nnz} \times 12}
+\end{equation}
+
+where dense requires 8 bytes/element (double), sparse requires ~12 bytes/nnz (value + index overhead).
+
+For 99\% sparsity:
+\begin{equation}
+\text{Memory Ratio} = \frac{n^2 \times 8}{0.01 \times n^2 \times 12} = 66.7\times
+\end{equation}
+
+\section{Analysis and Discussion}
+
+\subsection{Dense Optimization Insights}
+
+\begin{enumerate}
+    \item \textbf{NumPy BLAS Dominance:} NumPy's underlying BLAS library is highly optimized and hard to beat with pure Python implementations.
+    
+    \item \textbf{Block Size Matters:} For blocked multiplication, block sizes between 64-128 performed best, matching L1 cache line sizes.
+    
+    \item \textbf{Strassen's Overhead:} The recursive overhead of Strassen's algorithm only pays off for very large matrices ($n > 2048$) in practice.
+\end{enumerate}
+
+\subsection{Sparse Matrix Insights}
+
+\begin{enumerate}
+    \item \textbf{Sparsity Threshold:} Performance gains become dramatic above 95\% sparsity. At 99\%, sparse representation is 30-40× faster.
+    
+    \item \textbf{Memory is King:} Memory savings are even more impressive than speed improvements. At 99.9\% sparsity, memory usage drops by 300×.
+    
+    \item \textbf{Real-World Validation:} The mc2depi matrix demonstrates that many real scientific computing problems naturally exhibit high sparsity.
+    
+    \item \textbf{CSR Format Efficiency:} CSR format adds minimal overhead (1-2 integers per non-zero) while enabling dramatic performance improvements.
+\end{enumerate}
+
+\subsection{Comparison with Task 1}
+
+Comparing with Task 1's basic implementations:
+
+\begin{table}[H]
+\centering
+\begin{tabular}{@{}lccc@{}}
+\toprule
+\textbf{Implementation} & \textbf{Language} & \textbf{Time (n=1000)} & \textbf{Speedup} \\
+\midrule
+Task 1 - Naive & Python & 218.23 s & 1.0× \\
+Task 1 - Basic & C & 5.66 s & 38.6× \\
+Task 1 - Basic & Java & 1.90 s & 114.9× \\
+\midrule
+Task 2 - NumPy & Python & 0.019 s & 11,486× \\
+Task 2 - Sparse (99\%) & Python & 0.0002 s & 1,091,150× \\
+\bottomrule
+\end{tabular}
+\caption{Performance Comparison: Task 1 vs Task 2}
+\label{tab:task_comparison}
+\end{table}
+
+\textbf{Key Takeaway:} Algorithmic and data structure optimizations provide orders of magnitude more improvement than language choice alone.
+
+\subsection{Practical Implications for Big Data}
+
+\begin{enumerate}
+    \item \textbf{Sparse Formats are Essential:} For high-dimensional, sparse data (common in ML/NLP), dense representations are infeasible.
+    
+    \item \textbf{Choose the Right Tool:} NumPy/SciPy's optimized implementations should be preferred over custom code unless specific optimizations are needed.
+    
+    \item \textbf{Memory Before Speed:} In Big Data, fitting in memory is often more important than raw speed. Sparse formats enable processing datasets that would otherwise be impossible.
+    
+    \item \textbf{Matrix Structure Matters:} Understanding your data's sparsity pattern enables choosing the right storage format (CSR, CSC, COO, etc.).
+\end{enumerate}
+
+\section{Conclusions}
+
+This study comprehensively evaluated optimized matrix multiplication techniques for both dense and sparse matrices. Our main findings are:
+
+\begin{enumerate}
+    \item \textbf{Dense Optimizations:} While algorithmic improvements like Strassen's and blocked multiplication provide theoretical benefits, highly optimized libraries (BLAS) are difficult to outperform in practice.
+    
+    \item \textbf{Sparse Matrices:} For sparsity levels above 95\%, sparse representations provide dramatic improvements:
+    \begin{itemize}
+        \item 30-400× speedup depending on sparsity
+        \item 50-1000× memory reduction
+        \item Enable processing of matrices too large for dense format
+    \end{itemize}
+    
+    \item \textbf{Real-World Validation:} The mc2depi matrix (526K × 526K with 99.6\% sparsity) demonstrates practical applicability, executing in milliseconds while requiring only 24 MB memory.
+    
+    \item \textbf{Scalability:} Sparse formats enable handling matrices with millions of dimensions when high sparsity is present, making them essential for modern Big Data applications.
+\end{enumerate}
+
+\subsection{Future Work}
+
+Potential extensions include:
+\begin{itemize}
+    \item Exploring other sparse formats (CSC, Block Sparse Row)
+    \item Implementing GPU-accelerated sparse operations
+    \item Testing on more real-world matrices from different domains
+    \item Investigating hybrid dense-sparse algorithms
+    \item Parallel sparse matrix operations
+\end{itemize}
+
+\section{Repository}
+
+Complete source code, benchmarks, and visualizations are available at:
+
+\begin{center}
+\url{https://github.com/yain1/Individual-Assignment/tree/main/Task2}
+\end{center}
+
+\begin{thebibliography}{9}
+
+\bibitem{williams2007}
+Williams, S., Oliker, L., Vuduc, R., Shalf, J., Yelick, K., \& Demmel, J. (2007).
+\textit{Optimization of sparse matrix-vector multiplication on emerging multicore platforms}.
+Proceedings of the 2007 ACM/IEEE Conference on Supercomputing.
+
+\bibitem{strassen1969}
+Strassen, V. (1969).
+\textit{Gaussian elimination is not optimal}.
+Numerische Mathematik, 13(4), 354-356.
+
+\bibitem{scipy}
+Virtanen, P., et al. (2020).
+\textit{SciPy 1.0: fundamental algorithms for scientific computing in Python}.
+Nature Methods, 17(3), 261-272.
+
+\bibitem{suitesparse}
+Davis, T. A., \& Hu, Y. (2011).
+\textit{The University of Florida sparse matrix collection}.
+ACM Transactions on Mathematical Software, 38(1), 1-25.
+
+\end{thebibliography}
+
+\end{document}

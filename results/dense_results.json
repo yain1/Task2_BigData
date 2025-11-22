@@ -1,0 +1,110 @@
+[
+  {
+    "algorithm": "naive",
+    "matrix_size": 100,
+    "execution_time": 0.5350367000016073,
+    "gflops": 0.0037380613329777036
+  },
+  {
+    "algorithm": "numpy",
+    "matrix_size": 100,
+    "execution_time": 4.0633371099829674e-05,
+    "gflops": 49.22062693460311
+  },
+  {
+    "algorithm": "blocked",
+    "matrix_size": 100,
+    "execution_time": 0.0001291666024674972,
+    "gflops": 15.48387866362955
+  },
+  {
+    "algorithm": "strassen",
+    "matrix_size": 100,
+    "execution_time": 0.00012443331070244312,
+    "gflops": 16.07286657173811
+  },
+  {
+    "algorithm": "transpose",
+    "matrix_size": 100,
+    "execution_time": 0.010717233332494894,
+    "gflops": 0.1866153267313827
+  },
+  {
+    "algorithm": "naive",
+    "matrix_size": 200,
+    "execution_time": 4.304019966706012,
+    "gflops": 0.0037174548732972655
+  },
+  {
+    "algorithm": "numpy",
+    "matrix_size": 200,
+    "execution_time": 0.0002832666505128145,
+    "gflops": 56.483881780768215
+  },
+  {
+    "algorithm": "blocked",
+    "matrix_size": 200,
+    "execution_time": 0.0008671667116383711,
+    "gflops": 18.450892758291644
+  },
+  {
+    "algorithm": "strassen",
+    "matrix_size": 200,
+    "execution_time": 0.001442700003584226,
+    "gflops": 11.090316739620018
+  },
+  {
+    "algorithm": "transpose",
+    "matrix_size": 200,
+    "execution_time": 0.042407466719547905,
+    "gflops": 0.3772920487284078
+  },
+  {
+    "algorithm": "numpy",
+    "matrix_size": 500,
+    "execution_time": 0.0019011332963903744,
+    "gflops": 131.5005110239601
+  },
+  {
+    "algorithm": "blocked",
+    "matrix_size": 500,
+    "execution_time": 0.010206999955698848,
+    "gflops": 24.492995109735272
+  },
+  {
+    "algorithm": "strassen",
+    "matrix_size": 500,
+    "execution_time": 0.02034849999472499,
+    "gflops": 12.285917884109804
+  },
+  {
+    "algorithm": "transpose",
+    "matrix_size": 500,
+    "execution_time": 0.3052428332933535,
+    "gflops": 0.8190200480800072
+  },
+  {
+    "algorithm": "numpy",
+    "matrix_size": 1000,
+    "execution_time": 0.012614466715604067,
+    "gflops": 158.5481213824128
+  },
+  {
+    "algorithm": "blocked",
+    "matrix_size": 1000,
+    "execution_time": 0.07984653324820101,
+    "gflops": 25.048050536935005
+  },
+  {
+    "algorithm": "strassen",
+    "matrix_size": 1000,
+    "execution_time": 0.14241899992339313,
+    "gflops": 14.04307010353812
+  },
+  {
+    "algorithm": "transpose",
+    "matrix_size": 1000,
+    "execution_time": 1.311186833307147,
+    "gflops": 1.52533563424786
+  }
+]
